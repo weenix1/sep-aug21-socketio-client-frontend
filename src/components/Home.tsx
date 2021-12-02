@@ -1,6 +1,7 @@
-import { Container, Row, Col, Form, FormControl, ListGroup } from 'react-bootstrap'
+import { Container, Row, Col, Form, FormControl, ListGroup, ListGroupItem } from 'react-bootstrap'
 import { useState, useEffect, FormEvent } from 'react'
 import { io } from 'socket.io-client'
+import { IUser } from '../interfaces/IUser'
 
 const ADDRESS = 'http://localhost:3030' // <-- address of the BACKEND PROCESS
 const socket = io(ADDRESS, { transports: ['websocket'] })
@@ -19,12 +20,14 @@ const socket = io(ADDRESS, { transports: ['websocket'] })
 // CHAIN OF EVENTS/OPERATIONS:
 // 1) CONNECT TO THE SERVER
 // 2) SET YOUR USERNAME
-// 3) ...
+// 3) BE NOTIFIED WHEN ANOTHER USER CONNECTS
+// 4) ...send messages!
 
 const Home = () => {
   const [username, setUsername] = useState('')
   const [message, setMessage] = useState('')
   const [loggedIn, setLoggedIn] = useState(false)
+  const [onlineUsers, setOnlineUsers] = useState<IUser[]>([])
 
   // every time this component renders, a connection gets established to the server
   // thanks to the io invocation at line 6
@@ -58,6 +61,22 @@ const Home = () => {
       console.log("you're logged in!")
       // well done! let's set our interface as "logged in"
       setLoggedIn(true)
+      // now it would be nice to populate the connected users list...
+      fetchOnlineUsers()
+
+      // when a user succesfully sets his/her username, he receives a loggedin event
+      // but the server is also going another cool thing! to all the OTHER connected clients,
+      // they will be notified as well! they're going to receive ANOTHER event, called: "newConnection"
+      // "newConnection" is sent by the server as BROADCAST
+      // it means "newConnection" is sent to all the clients BUT the one who just connected
+      // so we should set up an event listener also for "newConnection", and in there
+      // we should call AGAIN the fetchOnlineUsers()
+      socket.on('newConnection', () => {
+        console.log('watch out! a new challenger appears!')
+        // this is for an "old" user which has to be notified about a new user entering the chat
+        // let's re-fetch the list of online users:
+        fetchOnlineUsers()
+      })
     })
   }, [])
 
@@ -68,6 +87,21 @@ const Home = () => {
     socket.emit('setUsername', { username: username })
     // every time the server receives a username, it sends BACK an event to the client!
     // and that event is called "loggedin"
+  }
+
+  const fetchOnlineUsers = async () => {
+    try {
+      let response = await fetch(ADDRESS + '/online-users')
+      if (response) {
+        let data: { onlineUsers: IUser[] } = await response.json()
+        // data is an array with all the current connected users
+        setOnlineUsers(data.onlineUsers)
+      } else {
+        console.log('error fetching the online users')
+      }
+    } catch (error) {
+      console.log(error)
+    }
   }
 
   return (
@@ -107,8 +141,10 @@ const Home = () => {
           {/* for the currently connected clients */}
           <div className='mb-3'>Connected users:</div>
           <ListGroup>
-            <ListGroup.Item>Ubeyt</ListGroup.Item>
-            <ListGroup.Item>Lidia</ListGroup.Item>
+            {onlineUsers.length === 0 && <ListGroupItem>No users yet!</ListGroupItem>}
+            {onlineUsers.map((user) => (
+              <ListGroupItem key={user.id}>{user.username}</ListGroupItem>
+            ))}
           </ListGroup>
         </Col>
       </Row>
