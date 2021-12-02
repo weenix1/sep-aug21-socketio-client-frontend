@@ -2,6 +2,7 @@ import { Container, Row, Col, Form, FormControl, ListGroup, ListGroupItem } from
 import { useState, useEffect, FormEvent } from 'react'
 import { io } from 'socket.io-client'
 import { IUser } from '../interfaces/IUser'
+import IMessage from '../interfaces/IMessage'
 
 const ADDRESS = 'http://localhost:3030' // <-- address of the BACKEND PROCESS
 const socket = io(ADDRESS, { transports: ['websocket'] })
@@ -28,6 +29,7 @@ const Home = () => {
   const [message, setMessage] = useState('')
   const [loggedIn, setLoggedIn] = useState(false)
   const [onlineUsers, setOnlineUsers] = useState<IUser[]>([])
+  const [chatHistory, setChatHistory] = useState<IMessage[]>([])
 
   // every time this component renders, a connection gets established to the server
   // thanks to the io invocation at line 6
@@ -78,6 +80,18 @@ const Home = () => {
         fetchOnlineUsers()
       })
     })
+
+    socket.on('message', (newMessage: IMessage) => {
+      console.log('a new message appeared!')
+      // this is for the other connected clients when a user is sending a message
+      // this should append the new message that has just been sent from someone else
+      // on THEIR chat history!
+      // let's append it!
+      //   setChatHistory([...chatHistory, newMessage]) // <-- kinda buggy, because the value of
+      // chatHistory is always going to be an empty array (that's the evaluated value when
+      // the useEffect hook executes)
+      setChatHistory((chatHistory) => [...chatHistory, newMessage])
+    })
   }, [])
 
   const handleUsernameSubmit = (e: FormEvent) => {
@@ -87,6 +101,28 @@ const Home = () => {
     socket.emit('setUsername', { username: username })
     // every time the server receives a username, it sends BACK an event to the client!
     // and that event is called "loggedin"
+  }
+
+  const handleMessageSubmit = (e: FormEvent) => {
+    e.preventDefault()
+
+    const newMessage: IMessage = {
+      text: message,
+      sender: username,
+      id: socket.id,
+      timestamp: Date.now(), // <-- ms expired 01/01/1970
+    }
+
+    socket.emit('sendmessage', newMessage)
+    // this is sending my message to the server. I'm not receiving back my own message,
+    // so I need to append it manually to my chat history.
+    // but all the other connected clients are going to receive it back from the server!
+    // the server is bouncing the message back to all the other clients in an event!
+    // and that event is called 'message'...
+    // let's set up a trap (event listener) for catching all the 'message' events
+    // that all the other clients are going to receive!
+    setChatHistory([...chatHistory, newMessage])
+    setMessage('')
   }
 
   const fetchOnlineUsers = async () => {
@@ -121,14 +157,19 @@ const Home = () => {
           </Form>
           {/* MIDDLE SECTION: CHAT HISTORY */}
           <ListGroup>
-            <ListGroup.Item>Cras justo odio</ListGroup.Item>
-            <ListGroup.Item>Dapibus ac facilisis in</ListGroup.Item>
-            <ListGroup.Item>Morbi leo risus</ListGroup.Item>
-            <ListGroup.Item>Porta ac consectetur ac</ListGroup.Item>
-            <ListGroup.Item>Vestibulum at eros</ListGroup.Item>
+            {chatHistory.map((message, i) => (
+              <ListGroupItem key={i}>
+                <strong>{message.sender}</strong>
+                <span className='mx-1'> | </span>
+                <span>{message.text}</span>
+                <span className='ml-2' style={{ fontSize: '0.7rem' }}>
+                  {new Date(message.timestamp).toLocaleTimeString('en-US')}
+                </span>
+              </ListGroupItem>
+            ))}
           </ListGroup>
           {/* BOTTOM SECTION: NEW MESSAGE INPUT FIELD */}
-          <Form>
+          <Form onSubmit={handleMessageSubmit}>
             <FormControl
               placeholder='Insert your message here'
               value={message}
