@@ -1,7 +1,7 @@
 interface IMessage {
   text: string
   sender: string
-  id: string
+  socketId: string
   timestamp: number
 }
 
