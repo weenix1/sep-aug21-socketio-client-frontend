@@ -1,7 +1,9 @@
 import { Room } from "./Room";
 
 export interface IUser {
-  username: string
-  id: string,
-  room: Room
+  hasNewMessages: boolean;
+  chatHistory: any;
+  username: string;
+  socketId: string;
+  room: Room;
 }
